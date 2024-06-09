@@ -12,24 +12,32 @@ class GameStopScraper:
         """
         self.root = "https://www.gamestop.com/"
         self.driver = webdriver.Chrome()
-    def search(self, search_text):
+        self.resultsPerPage = 20
+    def search(self, search_text, maxItems):
         """
         Searches for the price on a game by name
         """
-        pass
-    def get_all_video_game_deals(self, maxItems = 20):
+        searchURL = "search/?q=" + search_text + "&lang=default"
+        return self.get_results(searchURL, maxItems)
+    
+    def get_all_deals(self, maxItems = 20):
+       dealsURL = "deals/video-games?view=new&hybrid=true&srule=top-sellers"
+       return self.get_results(dealsURL, maxItems)
+    
+
+    def get_results(self, start_url = "deals/video-games?view=new&hybrid=true&srule=top-sellers", maxItems = 20):
         """
         Finds the current video game deals
         """
         # set total to 20 as default to not overflow results
-        resultTotal = 20
         page = 0
+        resultTotal = 20
         itemsPerPage = 20
         items = []
         recommendedItems = set()
-        while (page * itemsPerPage < resultTotal and page * itemsPerPage < maxItems):
+        while (page * self.resultsPerPage < resultTotal and page * itemsPerPage < maxItems):
           # this is the path to the deals (sorted by best sellers first)
-          path = "deals/video-games?view=new&hybrid=true&srule=top-sellers&start=" + str(itemsPerPage * page) + "&sz=20"
+          path = start_url + "&start=" + str(self.resultsPerPage * page) + "&sz=" + str(self.resultsPerPage)
           
           # get details from webpage
           self.driver.get(self.root + path)
@@ -56,7 +64,6 @@ class GameStopScraper:
                
                 body = (body[body.index("{"):body.rindex("}") + 1])
                 obj = json.loads(body)
-                print(obj)
                 for rec in obj["products-in-all-categories-PLP"]["recs"]:
                    recommendedItems.add(rec["id"])
 
@@ -67,8 +74,10 @@ class GameStopScraper:
                 obj = json.loads(body)
                 id = obj['product']['id']
                 if(id not in recommendedItems):
+                  specs = self.get_product_specifications(obj['product']['url']);
                   items.append({
                     "id": obj['product']['id'],
+                    "specs": specs,
                     "name": obj['product']['name'],
                     "price": obj['product']['price']
                   })
@@ -78,6 +87,17 @@ class GameStopScraper:
           page +=1
         return items
     
+    def get_product_specifications(self, url):
+      self.driver.get(self.root + url)
+      ROLLUP_UPC_CLASS = "product-attribute-table-redesign"
+      ROLLUP_UPC_DIV_CLASS = "col specifications js-productFeatures"
+      elements = self.driver.find_elements(By.XPATH, f"//div[@class='{ROLLUP_UPC_DIV_CLASS}']")
+      specs = []
+      for element in elements:
+        specName = element.find_element(By.XPATH, f".//table/tbody/tr/th")
+        specDetails = element.find_element(By.XPATH, f".//table/tbody/tr/td")
+        specs.append({specName.text: specDetails.text})
+      return specs
 scraper = GameStopScraper()
-items = scraper.get_all_video_game_deals()
+items = scraper.get_all_deals()
 print(items)
